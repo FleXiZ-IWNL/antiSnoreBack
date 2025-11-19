@@ -11,12 +11,14 @@ psycopg2-binary==2.9.9
 alembic==1.12.1
 
 # TensorFlow
-setuptools>=68.0.0
-wheel>=0.41.0
+pip>=24.0
+setuptools>=70.0.0
+wheel
 tensorflow==2.20.0
-numpy==1.24.3
+numpy>=1.26.0,<2.0.0
 librosa==0.10.1
 soundfile==0.12.1
+
 
 # Utilities
 python-dotenv==1.0.0
