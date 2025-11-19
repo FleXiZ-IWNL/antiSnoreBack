@@ -30,7 +30,13 @@ async def trigger_pump(
         raspi_client = get_raspi_client()
         
         # Trigger pump
-        response = await raspi_client.trigger_pump_sequence()
+        # response = await raspi_client.trigger_pump_sequence()
+                # Trigger pump (ส่ง duration ไปให้ Raspberry Pi)
+                # Trigger pump โดยส่ง duration จาก request ไปให้ Raspberry Pi
+        response = await raspi_client.trigger_pump_sequence(duration=request.duration)
+        logger.info(f"Raspi pump trigger response: {response}")
+
+
         
         # Log the pump activation
         pump_log = PumpLog(
