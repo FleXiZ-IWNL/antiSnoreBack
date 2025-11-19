@@ -11,6 +11,8 @@ psycopg2-binary==2.9.9
 alembic==1.12.1
 
 # TensorFlow
+setuptools>=68.0.0
+wheel>=0.41.0
 tensorflow==2.20.0
 numpy==1.24.3
 librosa==0.10.1
