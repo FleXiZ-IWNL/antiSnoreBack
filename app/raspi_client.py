@@ -104,32 +104,15 @@ class RaspberryPiClient:
     #         logger.error(f"Failed to trigger pump sequence: {e}")
     #         raise
     async def trigger_pump_sequence(self, duration: float = 3.0) -> Dict[str, Any]:
-        """
-        Trigger pump for a specific duration via Raspberry Pi /pump/trigger
+        async with httpx.AsyncClient(timeout=...) as client:
+            response = await client.post(
+                f"{self.base_url}/pump/trigger",
+                headers=self.headers,
+                json={"duration": duration},
+            )
+        response.raise_for_status()
+        return response.json()
 
-        Args:
-            duration: Duration in seconds (default 3.0)
-
-        Returns:
-            Response from Raspberry Pi
-        """
-        try:
-            # เรียก Raspberry Pi ที่ /pump/trigger โดยส่ง duration ไปให้
-            # เพิ่ม timeout เผื่อเวลา sleep บน Pi
-            effective_timeout = max(self.timeout, duration + 5.0)
-
-            async with httpx.AsyncClient(timeout=effective_timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/pump/trigger",
-                    headers=self.headers,
-                    json={"duration": duration},
-                )
-                response.raise_for_status()
-                return response.json()
-
-        except httpx.HTTPError as e:
-            logger.error(f"Failed to trigger pump sequence: {e}")
-            raise Exception(f"Failed to communicate with Raspberry Pi: {str(e)}")
 
     async def trigger_full_sequence(self) -> Dict[str, Any]:
         """

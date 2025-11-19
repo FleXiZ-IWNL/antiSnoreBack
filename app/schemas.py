@@ -59,6 +59,12 @@ class SnoreLogResponse(BaseModel):
 
 class PumpTriggerRequest(BaseModel):
     force: bool = False
+    duration: float = Field(
+        3.0,
+        ge=0.1,
+        le=300,
+        description="Pump duration in seconds"
+    )
 
 
 class PumpTriggerResponse(BaseModel):

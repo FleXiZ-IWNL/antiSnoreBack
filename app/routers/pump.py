@@ -14,9 +14,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pump", tags=["Pump Control"])
 
 
+# @router.post("/trigger", response_model=PumpTriggerResponse)
+# async def trigger_pump(
+#     request: PumpTriggerRequest = PumpTriggerRequest(),
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
 @router.post("/trigger", response_model=PumpTriggerResponse)
 async def trigger_pump(
-    request: PumpTriggerRequest = PumpTriggerRequest(),
+    request: PumpTriggerRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -33,6 +39,7 @@ async def trigger_pump(
         # response = await raspi_client.trigger_pump_sequence()
                 # Trigger pump (ส่ง duration ไปให้ Raspberry Pi)
                 # Trigger pump โดยส่ง duration จาก request ไปให้ Raspberry Pi
+                # Trigger pump โดยใช้ duration จาก request
         response = await raspi_client.trigger_pump_sequence(duration=request.duration)
         logger.info(f"Raspi pump trigger response: {response}")
 
