@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Create database tables
-
+Base.metadata.create_all(bind=engine)
 
 # Create FastAPI app
 app = FastAPI(
