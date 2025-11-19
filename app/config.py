@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     JWT_EXPIRATION_HOURS: int = 24
     
     # Raspberry Pi
-    RASPI_API_URL: str = "http://raspberrypi.local:5000"
+    RASPI_API_URL: str = "https://flexizantisnore.online"
     RASPI_API_KEY: str = "R7mP4xQ2kH9tF3wB8jT6nY4cV2sL5pA"
     
     # Server
