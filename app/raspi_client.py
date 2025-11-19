@@ -104,7 +104,7 @@ class RaspberryPiClient:
     #         logger.error(f"Failed to trigger pump sequence: {e}")
     #         raise
     async def trigger_pump_sequence(self, duration: float = 3.0) -> Dict[str, Any]:
-        async with httpx.AsyncClient(timeout=...) as client:
+        async with httpx.AsyncClient(timeout=duration + 5.0) as client:
             response = await client.post(
                 f"{self.base_url}/pump/trigger",
                 headers=self.headers,
