@@ -1,13 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Dict
-from datetime import datetime
-import asyncio
 import logging
 
 from ..database import get_db
 from ..models import User, SnoreLog, PumpLog
-from ..schemas import MessageResponse
 from ..auth import get_current_user
 from ..raspi_client import get_raspi_client
 
@@ -15,48 +12,38 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auto-detect", tags=["Auto Detection"])
 
-# Global state for auto detection
-auto_detection_state: Dict[str, any] = {
-    "is_running": False,
-    "user_id": None,
-    "delay_minutes": 5,
-    "stop_requested": False
-}
+# In-Memory State Store for Multiple Users
+# Structure: { "user_id_string": { "is_running": bool, "delay_minutes": int } }
+user_states: Dict[str, Dict] = {}
 
+def get_user_state(user_id: str) -> Dict:
+    """Get or initialize state for a specific user"""
+    if user_id not in user_states:
+        user_states[user_id] = {
+            "is_running": False,
+            "delay_minutes": 5
+        }
+    return user_states[user_id]
 
 @router.post("/start")
 async def start_auto_detection(
     delay_minutes: int = 5,
     current_user: User = Depends(get_current_user),
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
 ):
     """
-    Start automatic snoring detection
-    
-    Will continuously record 5-second audio clips and check for snoring
-    When snoring is detected, triggers pump sequence and delays for specified minutes
+    Start automatic snoring detection for the CURRENT USER.
     """
-    global auto_detection_state
+    user_id = str(current_user.id)
+    state = get_user_state(user_id)
     
-    if auto_detection_state["is_running"]:
-        return {
-            "status": "error",
-            "message": "Auto detection is already running",
-            "is_running": True
-        }
+    state["is_running"] = True
+    state["delay_minutes"] = delay_minutes
     
-    # Update state
-    auto_detection_state["is_running"] = True
-    auto_detection_state["user_id"] = str(current_user.id)
-    auto_detection_state["delay_minutes"] = delay_minutes
-    auto_detection_state["stop_requested"] = False
-    
-    logger.info(f"Auto detection started for user {current_user.email} with {delay_minutes} minute delay")
+    logger.info(f"Auto detection ENABLED for user {current_user.email} (ID: {user_id})")
     
     return {
         "status": "success",
-        "message": f"Auto detection started with {delay_minutes} minute delay",
+        "message": f"Auto detection enabled for {current_user.email}",
         "is_running": True,
         "delay_minutes": delay_minutes
     }
@@ -66,25 +53,17 @@ async def start_auto_detection(
 async def stop_auto_detection(
     current_user: User = Depends(get_current_user)
 ):
-    """Stop automatic snoring detection"""
-    global auto_detection_state
+    """Stop automatic snoring detection for the CURRENT USER"""
+    user_id = str(current_user.id)
+    state = get_user_state(user_id)
     
-    if not auto_detection_state["is_running"]:
-        return {
-            "status": "error",
-            "message": "Auto detection is not running",
-            "is_running": False
-        }
+    state["is_running"] = False
     
-    # Request stop
-    auto_detection_state["stop_requested"] = True
-    auto_detection_state["is_running"] = False
-    
-    logger.info(f"Auto detection stop requested by user {current_user.email}")
+    logger.info(f"Auto detection DISABLED by user {current_user.email}")
     
     return {
         "status": "success",
-        "message": "Auto detection stopped",
+        "message": "Auto detection disabled",
         "is_running": False
     }
 
@@ -93,14 +72,16 @@ async def stop_auto_detection(
 async def get_auto_detection_status(
     current_user: User = Depends(get_current_user)
 ):
-    """Get current auto detection status"""
+    """Get status specific to the CURRENT USER"""
+    user_id = str(current_user.id)
+    state = get_user_state(user_id)
+    
     return {
         "status": "success",
-        "is_running": auto_detection_state["is_running"],
-        "delay_minutes": auto_detection_state["delay_minutes"],
-        "user_id": auto_detection_state["user_id"]
+        "is_running": state["is_running"],
+        "delay_minutes": state["delay_minutes"],
+        "user_id": user_id
     }
-
 
 @router.post("/simulate-detection")
 async def simulate_snoring_detection(
@@ -108,9 +89,7 @@ async def simulate_snoring_detection(
     db: Session = Depends(get_db)
 ):
     """
-    Simulate snoring detection and trigger pump sequence
-    This endpoint simulates the detection without actual audio recording
-    Used for testing the auto detection flow
+    Simulate snoring detection for the current user
     """
     try:
         # Log the simulated detection
@@ -125,10 +104,20 @@ async def simulate_snoring_detection(
         
         logger.info(f"Simulated snoring detected for user {current_user.email}")
         
-        # Trigger pump sequence
+        # Note: In the Cloud/Client architecture, the Backend usually doesn't trigger the pump directly.
+        # However, for simulation testing, if this is running locally, it might try.
+        # If running on Render, this might fail if RaspiClient tries to connect to localhost.
+        # We'll keep the logic but wrap safely.
+        
+        pump_response = None
+        pump_triggered = False
+        
         try:
+            # Only try to trigger if we have a configured client URL (unlikely on Render towards generic client)
+            # But let's assume this endpoint is for testing logic mainly.
             raspi_client = get_raspi_client()
             pump_response = await raspi_client.trigger_full_sequence()
+            pump_triggered = True
             
             # Log pump activation
             pump_log = PumpLog(
@@ -138,37 +127,18 @@ async def simulate_snoring_detection(
             db.add(pump_log)
             db.commit()
             
-            logger.info(f"Pump sequence triggered successfully: {pump_response}")
-            
-            return {
-                "status": "success",
-                "message": "Snoring detected! Pump sequence activated (Inflate 50s + Deflate 30s)",
-                "snore_detected": True,
-                "confidence": 0.85,
-                "pump_triggered": True,
-                "pump_response": pump_response
-            }
-        
         except Exception as pump_error:
-            logger.error(f"Failed to trigger pump: {pump_error}")
-            
-            # Log failed pump activation
-            pump_log = PumpLog(
-                activated_by=current_user.id,
-                status="failed",
-                error_message=str(pump_error)
-            )
-            db.add(pump_log)
-            db.commit()
-            
-            return {
-                "status": "partial_success",
-                "message": "Snoring detected but pump activation failed",
-                "snore_detected": True,
-                "confidence": 0.85,
-                "pump_triggered": False,
-                "error": str(pump_error)
-            }
+            logger.warning(f"Simulate: Could not trigger pump directly (Normal on Cloud): {pump_error}")
+            # Don't error out the whole request, just note it
+        
+        return {
+            "status": "success",
+            "message": "Snoring simulation recorded",
+            "snore_detected": True,
+            "confidence": 0.85,
+            "pump_triggered": pump_triggered,
+            "pump_response": pump_response
+        }
     
     except Exception as e:
         logger.error(f"Error in simulate detection: {e}")
@@ -176,4 +146,3 @@ async def simulate_snoring_detection(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
