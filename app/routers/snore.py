@@ -55,7 +55,7 @@ async def detect_snoring(
         
         # Trigger pump if snoring detected
         pump_triggered = False
-        if snore_detected and confidence > 0.6:
+        if snore_detected and confidence >= 0.75:
             try:
                 raspi_client = get_raspi_client()
                 await raspi_client.trigger_pump_sequence()
